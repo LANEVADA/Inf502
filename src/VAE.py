@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
+import matplotlib.pyplot as plt
+import numpy as np
 
 image_size=128
 batch_size = 32
@@ -204,9 +206,7 @@ def train(device,num_epochs,train_dataloader,test_dataloader):
             torch.save(model.state_dict(), f"models/vae/{epoch}.pth")
             print("Model saved!")
         
-import torch
-import matplotlib.pyplot as plt
-import numpy as np
+
 
 # Function to perform the interpolation
 def interpolate_and_display(model,img1, img2, num_steps=10):
