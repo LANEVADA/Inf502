@@ -50,16 +50,17 @@ class VAEInterpolation(Interpolation):
 
 # Example usage:
 # Initialize the models and images
-vae_model = ...  # Your pre-trained VAE model
-linear_interp = LinearInterpolation()
-vae_interp = VAEInterpolation(vae_model)
+if __name__=='__main__':
+    vae_model = VAE()  # Your pre-trained VAE model
+    linear_interp = LinearInterpolation()
+    vae_interp = VAEInterpolation(vae_model)
 
-img1 = torch.randn(1, 3, 64, 64)  # Example image 1
-img2 = torch.randn(1, 3, 64, 64)  # Example image 2
-alpha = 0.5  # Interpolation factor
+    img1 = torch.randn(1, 3, 64, 64)  # Example image 1
+    img2 = torch.randn(1, 3, 64, 64)  # Example image 2
+    alpha = 0.5  # Interpolation factor
 
-# Linear interpolation
-linear_result = linear_interp.interpolate(img1, img2, alpha)
+    # Linear interpolation
+    linear_result = linear_interp.interpolate(img1, img2, alpha)
 
-# VAE interpolation
-vae_result = vae_interp.interpolate(img1, img2, alpha)
+    # VAE interpolation
+    vae_result = vae_interp.interpolate(img1, img2, alpha)

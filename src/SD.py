@@ -56,7 +56,7 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(),num_fra
         images_interpolated.append(pipe(prompt=text_prompt, image=image_interpolated, strength=0.2, guidance_scale=5.0).images[0])
     # Generate images from the interpolated latent codes
     
-    return pipe(prompt=text_prompt, image=images_interpolated, strength=0.2, guidance_scale=5.0).images
+    return image_interpolated
 def preprocess_image(image_path, image_size=(256,256)):
     image = Image.open(image_path).convert("RGB")
     transform = transforms.Compose([
@@ -87,10 +87,10 @@ def generate_key_frames(initial_image, text_prompt, num_frames=16, strength=0.8,
 
         # Display the frame
         frame_np = np.array(image)
-        plt.imshow(frame_np)
-        plt.axis('off')
-        plt.show(block=False)
-        plt.pause(0.1)
+        # plt.imshow(frame_np)
+        # plt.axis('off')
+        # plt.show(block=False)
+        # plt.pause(0.1)
 
         # Set the current frame to the last generated frame
         current_frame = transform(image).unsqueeze(0).to(device)
@@ -126,12 +126,14 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
             frames.append(frame[0].cpu().numpy())    
 
     # Save the video
-    height, width, _ = frames[0].shape
+    # print(frames[0].shape)
+    height, width= frames[0].shape
     fourcc = cv2.VideoWriter_fourcc(*"XVID")
     out = cv2.VideoWriter(output_video, fourcc, 10, (width, height))
 
     for frame in frames:
-        out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        frame_uint8 = (frame * 255).astype(np.uint8)
+        out.write(cv2.cvtColor(frame_uint8, cv2.COLOR_RGB2BGR))
 
     out.release()
     print(f"Video saved as {output_video}")
@@ -142,5 +144,5 @@ if __name__=="__main__":
     text_prompt = "A Summer night at the beach."  # Change this to your text prompt
     initial_image = preprocess_image(image_path)
 
-    # generate_key_frames(initial_image, text_prompt, num_frames=3)
-    generate_interpolated_video(output_folder="outputs/keyframes", output_video="outputs/output.avi", step=100)
+    generate_key_frames(initial_image, text_prompt, num_frames=3)
+    generate_interpolated_video(output_folder="outputs/keyframes", output_video="outputs/output.avi", step=30)
