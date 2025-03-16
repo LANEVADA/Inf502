@@ -53,13 +53,33 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     for i in range(num_frames):
         alpha = i / (num_frames - 1)
         image_interpolated = interp_model.interpolate(image1, image2, alpha)
-        interp_image=pipe(prompt=text_prompt, image=image_interpolated, strength=0.4, guidance_scale=6.0).images[0]
+        interp_image=pipe(prompt=text_prompt, image=image_interpolated, strength=0.2, guidance_scale=5.0).images[0]
         image_path = os.path.join(output_allframes, f"frame_{image_name}_{i:03d}.png")
         interp_image.save(image_path)
         images_interpolated.append(interp_image)
     # Generate images from the interpolated latent codes
     
     return images_interpolated
+
+def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolation(),depth=8):
+    """ Interpolates between two images using Stable Diffusion and returns the generated images. """
+    if depth ==0:
+        return [image2]
+    else:
+        transform = transforms.Compose([
+        transforms.Resize((256,256)),
+        transforms.ToTensor(),
+    ])
+        intermediate_image=interp_model.interpolate(image1,image2,0.5)
+        text_prompt="A natural image"
+        interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*depth, guidance_scale=5.0).images[0]
+        path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        interp_image.save(path)
+        interp_image=transform(interp_image).unsqueeze(0).to(device)
+        return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
+
+
 def preprocess_image(image_path, image_size=(256,256)):
     image = Image.open(image_path).convert("RGB")
     transform = transforms.Compose([
@@ -124,8 +144,10 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
         next_frame = transform(img2).unsqueeze(0).to(device)
 
         # Interpolate between the frames
-        interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
+        #interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
+        interpolated_frames=interpolate_images_iter(current_frame,next_frame,num=i)
         for frame in interpolated_frames:
+            frame = transforms.ToPILImage()(frame.squeeze(0).cpu())  # Convert tensor to PIL
             frame=np.array(frame)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             frames.append(frame)  
@@ -145,7 +167,7 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
 if __name__=="__main__":
     # Load the initial image
     image_path = "images/test.jpg"  # Change this to your image path
-    text_prompt = "A Summer night at the beach."  # Change this to your text prompt
+    text_prompt = "Sunrise and sunset at the beach."  # Change this to your text prompt
     initial_image = preprocess_image(image_path)
 
     generate_key_frames(initial_image, text_prompt, num_frames=3)
