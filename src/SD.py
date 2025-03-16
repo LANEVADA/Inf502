@@ -72,10 +72,13 @@ def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolatio
     ])
         intermediate_image=interp_model.interpolate(image1,image2,0.5)
         text_prompt="A natural image"
-        interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*depth, guidance_scale=5.0).images[0]
         path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
+        interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*depth, guidance_scale=5.0).images[0]
+        
         interp_image.save(path)
+        raw.save(path.replace(".png","_raw.png"))
         interp_image=transform(interp_image).unsqueeze(0).to(device)
         return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
 
@@ -167,7 +170,7 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
 if __name__=="__main__":
     # Load the initial image
     image_path = "images/test.jpg"  # Change this to your image path
-    text_prompt = "Sunrise and sunset at the beach."  # Change this to your text prompt
+    text_prompt = "Summer night at the beach."  # Change this to your text prompt
     initial_image = preprocess_image(image_path)
 
     generate_key_frames(initial_image, text_prompt, num_frames=3)
