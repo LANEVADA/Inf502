@@ -18,6 +18,7 @@ import torch.nn.functional as F
 import cv2
 from Interpolation import Interpolation, LinearInterpolation, VAEInterpolation
 from VAE import VAE
+from LLM import LLMClient
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 image_size=128
@@ -179,13 +180,18 @@ def generate_interpolated_video(interpolation=LinearInterpolation(),output_folde
     
 if __name__=="__main__":
     # Load the initial image
+    client = LLMClient()
     image_path = "images/test2.jpg"  # Change this to your image path
-    text_prompt = ["Beautiful mountain landscape.", "Storm in a mountain landscape."] # Change this to your text prompt
+    text_prompt = "Beautiful mountain landscape." # Change this to your text prompt
+
+    text_prompt_list = client.generate_next_prompts(text_prompt)
+    text_prompt_list = client.generate_subprompts(text_prompt)
+
     initial_image = preprocess_image(image_path)
     vae=VAE(latent_dim=128)
     vae.load_state_dict(torch.load("models/vae/100.pth"))
     vae.to(device)
     vae_interp=VAEInterpolation(vae)
     # Generate
-    generate_key_frames(initial_image, text_prompt, num_frames=4)
+    generate_key_frames(initial_image, text_prompt_list, num_frames=len(text_prompt_list))
     generate_interpolated_video(interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")

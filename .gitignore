@@ -5,3 +5,4 @@ outputs/
 outputs_ft_vae/
 outputs_iter_vae/
 outputs_iter_mult/
+.env
