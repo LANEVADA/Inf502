@@ -18,6 +18,8 @@ import torch.nn.functional as F
 import cv2
 from Interpolation import Interpolation, LinearInterpolation, VAEInterpolation
 from VAE import VAE
+from skimage.metrics import structural_similarity as ssim
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 image_size=128
@@ -46,6 +48,16 @@ pipe.scheduler.set_timesteps(50)  # Reduce noise for smoother results
 pipe.enable_attention_slicing(slice_size="auto")  # Reduce the slice size if needed
 pipe.to(device)
 
+def resize_image(image, size=(512, 512)):
+    """Resizes a PIL Image or tensor to the given size."""
+    if isinstance(image, torch.Tensor):
+        transform = transforms.Compose([
+            transforms.Resize(size),
+            transforms.ToPILImage()
+        ])
+        return transform(image.squeeze(0).cpu())  # Convert to PIL for SD pipeline
+    return image.resize(size, Image.LANCZOS)
+
 def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output_allframes="outputs/allframes",image_name="",num_frames=100):
     """ Interpolates between two images using Stable Diffusion and returns the generated images. """
 
@@ -56,7 +68,7 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     for i in range(num_frames):
         alpha = i / (num_frames - 1)
         image_interpolated = interp_model.interpolate(image1, image2, alpha)
-        
+        image_interpolated=resize_image(image_interpolated)
         interp_image=pipe(prompt=text_prompt, image=image_interpolated, strength=0.2, guidance_scale=5.0).images[0]
         image_path = os.path.join(output_allframes, f"frame_{image_name}_{i:03d}.png")
         interp_image.save(image_path)
@@ -65,28 +77,83 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     
     return images_interpolated
 
-def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolation(),depth=8):
-    """ Interpolates between two images using Stable Diffusion and returns the generated images. """
-    if depth ==0:
+# def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolation(),depth=8):
+#     """ Interpolates between two images using Stable Diffusion and returns the generated images. """
+#     if depth ==0:
+#         return [image2]
+#     else:
+#         if (depth<=4):
+#             interp_model=LinearInterpolation()
+#     transform = transforms.Compose([
+#         transforms.Resize((image_size,image_size)),
+#         transforms.ToTensor(),
+#     ])
+#     intermediate_image=interp_model.interpolate(image1,image2,0.5)
+#     text_prompt="A natural image"
+#     path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
+#     os.makedirs(os.path.dirname(path), exist_ok=True)
+#     raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
+#     intermediate_image=resize_image(intermediate_image)
+#     interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*(12-depth), guidance_scale=5.0).images[0]
+#     interp_image.save(path)
+#     raw.save(path.replace(".png","_raw.png"))
+#     interp_image=transform(interp_image).unsqueeze(0).to(device)
+#     return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
+
+# Load the CLIP model for image similarity
+# clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+# clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+
+def calculate_ssim(image1, image2):
+    """Computes Structural Similarity Index (SSIM) between two images."""
+    image1=transforms.ToPILImage()(image1.squeeze(0).cpu())
+    image2=transforms.ToPILImage()(image2.squeeze(0).cpu())
+    image1_gray = cv2.cvtColor(np.array(image1), cv2.COLOR_RGB2GRAY)
+    image2_gray = cv2.cvtColor(np.array(image2), cv2.COLOR_RGB2GRAY)
+    
+    score, _ = ssim(image1_gray, image2_gray, full=True)
+    return score  # SSIM is in range [-1, 1] (closer to 1 means more similar)
+
+
+def adjust_depth_based_on_similarity(image1, image2, min_depth=0, max_depth=10):
+    """Adjusts the depth based on image similarity."""
+    similarity = calculate_ssim(image1, image2)
+    # Convert similarity to depth
+    depth = min_depth + 3*(1 - similarity) * (max_depth - min_depth)
+    return int(np.round(depth))
+
+def interpolate_images_iter(image1, image2, num=0, interp_model=LinearInterpolation(), depth=8):
+    """Interpolates between two images using Stable Diffusion with dynamic depth."""
+    if depth == 0:
         return [image2]
-    else:
-        if (depth<=4):
-            interp_model=LinearInterpolation()
+
+    if depth <= 4:
+        interp_model = LinearInterpolation()
+
     transform = transforms.Compose([
-        transforms.Resize((image_size,image_size)),
+        transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
     ])
-    intermediate_image=interp_model.interpolate(image1,image2,0.5)
-    text_prompt="A natural image"
-    path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
+
+    intermediate_image = interp_model.interpolate(image1, image2, 0.5)
+    text_prompt = "A natural image"
+    path = os.path.join("outputs/allframes", f"indice_{num} at depth_{depth}.png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
-    interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*(12-depth), guidance_scale=5.0).images[0]
-    
+
+    # Resize before processing
+    raw = resize_image(intermediate_image)
+    interp_image = pipe(prompt=text_prompt, image=raw, strength=0.5, guidance_scale=5.0).images[0]
+
     interp_image.save(path)
-    raw.save(path.replace(".png","_raw.png"))
-    interp_image=transform(interp_image).unsqueeze(0).to(device)
-    return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
+    raw.save(path.replace(".png", "_raw.png"))
+    interp_image = transform(interp_image).unsqueeze(0).to(device)
+
+    # Calculate depth for the next interpolation step based on image similarity
+    adjusted_depth1 = adjust_depth_based_on_similarity(image1, interp_image, min_depth=1, max_depth=depth)
+    adjusted_depth2 = adjust_depth_based_on_similarity(interp_image, image2, min_depth=1, max_depth=depth)
+
+    return interpolate_images_iter(image1, interp_image, num, interp_model, adjusted_depth1) + \
+           interpolate_images_iter(interp_image, image2, num, interp_model, adjusted_depth2)
 
 
 def preprocess_image(image_path, image_size=(image_size,image_size)):
@@ -115,8 +182,9 @@ def generate_key_frames(initial_image, text_prompt, num_frames=16, strength=0.8,
     for i in range(num_prompts):
         for j in range(frames_per_prompt):
         # Generate the next frame
+            current_frame = resize_image(current_frame)
             image = pipe(prompt=text_prompt[i], image=current_frame, strength=strength, guidance_scale=guidance_scale).images[0]
-
+            image=resize_image(image,size=(image_size,image_size))
             # Save the frame
             image_path = os.path.join(output_folder, f"frame_{frames_per_prompt*i+j:03d}.png")
             image.save(image_path)
@@ -137,7 +205,7 @@ import torch
 import numpy as np
 
 
-def generate_interpolated_video(interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=10, device="cuda"):
+def generate_interpolated_video(interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=8, device="cuda"):
     """ Loads key frames, generates interpolated frames using VAE, and creates a video. """
     frames = []
     frame_files = sorted(os.listdir(output_folder))  # Ensure correct order
@@ -188,4 +256,4 @@ if __name__=="__main__":
     vae_interp=VAEInterpolation(vae)
     # Generate
     generate_key_frames(initial_image, text_prompt, num_frames=4)
-    generate_interpolated_video(interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")
+    generate_interpolated_video(interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi")

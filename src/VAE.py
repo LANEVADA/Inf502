@@ -257,18 +257,15 @@ def interpolate_and_display(model,img1, img2, num_steps=10):
     torch_dtype=torch.float16,
     safety_checker=None  # Disables NSFW filter
     ).to("cuda")
-    # Set the scheduler
     pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-    pipe.scheduler.set_timesteps(50)  # Reduce noise for smoother results
-    # Enable attention slicing with a smaller slice size
-    pipe.enable_attention_slicing(slice_size="auto")  # Reduce the slice size if needed
+    pipe.scheduler.set_timesteps(50)  
+    pipe.enable_attention_slicing(slice_size="auto") 
     pipe.to(device)
-    # Move the model and images to the correct device
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()
-    img1 = img1.to(device) # Unsqueeze to add a batch dimension
-    img2 = img2.to(device)  # Unsqueeze to add a batch dimension
+    img1 = img1.to(device) 
+    img2 = img2.to(device) 
 
     # Encode the two images to get their latent vectors
     mu1, logvar1 = model.encode(img1)
