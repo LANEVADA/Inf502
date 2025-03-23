@@ -17,7 +17,10 @@ import os
 import torch.nn.functional as F
 import cv2
 from Interpolation import Interpolation, LinearInterpolation, VAEInterpolation
+from VAE import VAE
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+image_size=128
 
 # Load CLIP model for text encoding
 # clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
@@ -53,6 +56,7 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     for i in range(num_frames):
         alpha = i / (num_frames - 1)
         image_interpolated = interp_model.interpolate(image1, image2, alpha)
+        
         interp_image=pipe(prompt=text_prompt, image=image_interpolated, strength=0.2, guidance_scale=5.0).images[0]
         image_path = os.path.join(output_allframes, f"frame_{image_name}_{i:03d}.png")
         interp_image.save(image_path)
@@ -66,27 +70,29 @@ def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolatio
     if depth ==0:
         return [image2]
     else:
-        transform = transforms.Compose([
-        transforms.Resize((256,256)),
+        if (depth<=4):
+            interp_model=LinearInterpolation()
+    transform = transforms.Compose([
+        transforms.Resize((image_size,image_size)),
         transforms.ToTensor(),
     ])
-        intermediate_image=interp_model.interpolate(image1,image2,0.5)
-        text_prompt="A natural image"
-        path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
-        interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*depth, guidance_scale=5.0).images[0]
-        
-        interp_image.save(path)
-        raw.save(path.replace(".png","_raw.png"))
-        interp_image=transform(interp_image).unsqueeze(0).to(device)
-        return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
+    intermediate_image=interp_model.interpolate(image1,image2,0.5)
+    text_prompt="A natural image"
+    path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
+    interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*(12-depth), guidance_scale=5.0).images[0]
+    
+    interp_image.save(path)
+    raw.save(path.replace(".png","_raw.png"))
+    interp_image=transform(interp_image).unsqueeze(0).to(device)
+    return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
 
 
-def preprocess_image(image_path, image_size=(256,256)):
+def preprocess_image(image_path, image_size=(image_size,image_size)):
     image = Image.open(image_path).convert("RGB")
     transform = transforms.Compose([
-        transforms.Resize(image_size),
+        transforms.Resize((image_size)),
         transforms.ToTensor(),
     ])
     return transform(image).unsqueeze(0).to(device)  # Add batch dimension
@@ -98,28 +104,32 @@ def generate_key_frames(initial_image, text_prompt, num_frames=16, strength=0.8,
 
     # Convert PIL image to tensor
     transform = transforms.Compose([
-        transforms.Resize((256,256)),
+        transforms.Resize((image_size,image_size)),
         transforms.ToTensor(),
     ])
     
+    num_prompts = len(text_prompt)
+    frames_per_prompt = num_frames // num_prompts
+            
     current_frame = initial_image
-    for i in range(num_frames):
+    for i in range(num_prompts):
+        for j in range(frames_per_prompt):
         # Generate the next frame
-        image = pipe(prompt=text_prompt, image=current_frame, strength=strength, guidance_scale=guidance_scale).images[0]
+            image = pipe(prompt=text_prompt[i], image=current_frame, strength=strength, guidance_scale=guidance_scale).images[0]
 
-        # Save the frame
-        image_path = os.path.join(output_folder, f"frame_{i:03d}.png")
-        image.save(image_path)
+            # Save the frame
+            image_path = os.path.join(output_folder, f"frame_{frames_per_prompt*i+j:03d}.png")
+            image.save(image_path)
 
-        # Display the frame
-        # frame_np = np.array(image)
-        # plt.imshow(frame_np)
-        # plt.axis('off')
-        # plt.show(block=False)
-        # plt.pause(0.1)
+            # Display the frame
+            # frame_np = np.array(image)
+            # plt.imshow(frame_np)
+            # plt.axis('off')
+            # plt.show(block=False)
+            # plt.pause(0.1)
 
-        # Set the current frame to the last generated frame
-        current_frame = transform(image).unsqueeze(0).to(device)
+            # Set the current frame to the last generated frame
+            current_frame = transform(image).unsqueeze(0).to(device)
 
     print(f"Key frames saved in {output_folder}")
     
@@ -127,13 +137,13 @@ import torch
 import numpy as np
 
 
-def generate_interpolated_video(output_folder="outputs/keyframes", output_video="outputs/output.avi",step=100, device="cuda"):
+def generate_interpolated_video(interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=10, device="cuda"):
     """ Loads key frames, generates interpolated frames using VAE, and creates a video. """
     frames = []
     frame_files = sorted(os.listdir(output_folder))  # Ensure correct order
 
     transform = transforms.Compose([
-    transforms.Resize((256,256)),  # Resize to a smaller size for efficiency
+    transforms.Resize((image_size,image_size)),  # Resize to a smaller size for efficiency
     transforms.ToTensor(),
 ])
     cnt=0
@@ -148,7 +158,7 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
 
         # Interpolate between the frames
         #interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
-        interpolated_frames=interpolate_images_iter(current_frame,next_frame,num=i)
+        interpolated_frames=interpolate_images_iter(current_frame,next_frame,num=i,interp_model=interpolation,depth=depth)
         for frame in interpolated_frames:
             frame = transforms.ToPILImage()(frame.squeeze(0).cpu())  # Convert tensor to PIL
             frame=np.array(frame)
@@ -169,9 +179,13 @@ def generate_interpolated_video(output_folder="outputs/keyframes", output_video=
     
 if __name__=="__main__":
     # Load the initial image
-    image_path = "images/test.jpg"  # Change this to your image path
-    text_prompt = "Summer night at the beach."  # Change this to your text prompt
+    image_path = "images/test2.jpg"  # Change this to your image path
+    text_prompt = ["Beautiful mountain landscape.", "Storm in a mountain landscape."] # Change this to your text prompt
     initial_image = preprocess_image(image_path)
-
-    generate_key_frames(initial_image, text_prompt, num_frames=3)
-    generate_interpolated_video(output_folder="outputs/keyframes", output_video="outputs/output.avi", step=300)
+    vae=VAE(latent_dim=128)
+    vae.load_state_dict(torch.load("models/vae/100.pth"))
+    vae.to(device)
+    vae_interp=VAEInterpolation(vae)
+    # Generate
+    generate_key_frames(initial_image, text_prompt, num_frames=4)
+    generate_interpolated_video(interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")

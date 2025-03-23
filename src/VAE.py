@@ -10,8 +10,13 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
+from diffusers import DDIMScheduler
+from diffusers import StableDiffusionImg2ImgPipeline
 import matplotlib.pyplot as plt
 import numpy as np
+import torch.nn.functional as F
+from torchvision import models
+import lpips
 
 image_size=128
 batch_size = 32
@@ -25,6 +30,7 @@ class ImageFolderSplitter(Dataset):
         :param split: Either 'train' or 'test', decides which split to load.
         :param transform: Optional transform to be applied on a sample.
         """
+        
         self.base_dir = base_dir
         self.train_size = train_size
         self.test_size = test_size
@@ -77,7 +83,7 @@ transform = transforms.Compose([
 
 
 class VAE(nn.Module):
-    def __init__(self, latent_dim=128):
+    def __init__(self, latent_dim=1024):
         super(VAE, self).__init__()
         
         self.latent_dim = latent_dim
@@ -136,86 +142,133 @@ class VAE(nn.Module):
         return self.decode(z), mu, logvar
 
 def loss_function(recon_x, x, mu, logvar):
-    BCE = nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
-    
-    # KL divergence between the learned distribution and a standard normal
-    # KL = -0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    # The factor of 0.5 comes from integrating over the continuous space
-    # where the variance is expected to be 1.
-    # -0.5 * sum(1 + log(var) - mean^2 - var)
-    # 'sum' reduction computes the total for the batch
-    # Make sure your input images are normalized to [0, 1] to use BCE
-    # If using different loss formulations like MSE, this might need adjustments
-    MSE_loss = nn.MSELoss(reduction='sum')
-    recon_loss = MSE_loss(recon_x.view(-1, 3 * 64 * 64), x.view(-1, 3 * 64 * 64))
-    
-    # Calculate KL divergence loss
-    KL_divergence = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    
-    return recon_loss + KL_divergence
+    """VAE Loss: MSE + KL Divergence"""
+    recon_loss = F.mse_loss(recon_x, x, reduction="sum")  # Reconstruction loss
+    kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())  # KL loss
+    return recon_loss + kl_div
 
-def train(device,num_epochs,train_dataloader,test_dataloader):
+def perceptual_loss(img1, img2, lpips_loss_fn):
+    """LPIPS-based perceptual loss"""
+    return lpips_loss_fn(img1, img2).mean()
 
-    model = VAE(latent_dim=1024).to(device)
+def train(device, num_epochs, train_dataloader, test_dataloader):
+    model = VAE(latent_dim=128).to(device)
+    model.load_state_dict(torch.load("models/vae/80.pth"))
+    model.train()
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)  # Lower LR for stability
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    # Training loop
+    # Load LPIPS loss model (better than VGG perceptual loss)
+    lpips_loss_fn = lpips.LPIPS(net="vgg").to(device)
+
+    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+        "CompVis/stable-diffusion-v1-4",
+        torch_dtype=torch.float16,
+        safety_checker=None
+    ).to(device)
+    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    pipe.scheduler.set_timesteps(50)
+    
     for epoch in range(num_epochs):
         model.train()
         train_loss = 0.0
+        
         for batch_idx, (data, _) in enumerate(train_dataloader):
             data = data.to(device)
-            
-            # Zero the gradients
             optimizer.zero_grad()
-            # Forward pass
-            recon_batch, mu, logvar = model(data)
-            # Compute the loss
-            #loss = loss_function(recon_batch, data, mu, logvar)
-            
-            recon_batch, mu, logvar = model(data)
-            loss = loss_function(recon_batch, data, mu, logvar)
+
+            # VAE Forward Pass
+            recon_batch, mu, logvar = model(data)  
+
+            # Stable Diffusion Refinement (no gradients here)
+            with torch.no_grad():
+                sd_images = []
+                for i in range(recon_batch.size(0)):  
+                    sd_image = pipe(
+                        prompt="A natural image",
+                        image=recon_batch[i],
+                        strength=0.05,  # Keep SD changes minimal
+                        guidance_scale=2.5  # Reduce impact of text conditioning
+                    ).images[0]
+                    sd_images.append(transforms.ToTensor()(sd_image).to(device))
+                
+                sd_batch = torch.stack(sd_images)  # SD-processed images (no gradients)
+
+            # Compute Loss
+            vae_loss = loss_function(recon_batch, data, mu, logvar)  # Standard VAE loss
+            perceptual_sim_loss = perceptual_loss(sd_batch, data, lpips_loss_fn)  # LPIPS perceptual loss
+            pixel_loss = F.l1_loss(recon_batch, data) + F.mse_loss(recon_batch, data)  # Fine-grained pixel loss
+
+            loss = vae_loss + 0.1 * perceptual_sim_loss + 0.1 * pixel_loss  # Weighted combination
+
             loss.backward()
-            # Backward pass
-        
-            
-            # Update weights
-            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
-            
             train_loss += loss.item()
-            
+
             if batch_idx % 5 == 0:
-                print(f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_dataloader)}], Loss: {loss.item()},Generator loss: {loss_G.item()}, Discriminator loss: {loss_D.item()}")
+                print(f"Epoch [{epoch}/{num_epochs}], Batch [{batch_idx}/{len(train_dataloader)}], Loss: {loss.item()}")
 
         print(f"Epoch [{epoch}/{num_epochs}] Training Loss: {train_loss / len(train_dataloader)}")
 
-        # Test the model
+        # Validation Loop
         model.eval()
         test_loss = 0.0
         with torch.no_grad():
             for data, _ in test_dataloader:
                 data = data.to(device)
                 recon_batch, mu, logvar = model(data)
-                loss = loss_function(recon_batch, data, mu, logvar)
+
+                # Stable Diffusion processing
+                sd_images = []
+                for i in range(recon_batch.size(0)):
+                    sd_image = pipe(
+                        prompt="A natural image",
+                        image=recon_batch[i],
+                        strength=0.05,  # Lower strength for closer images
+                        guidance_scale=2.5
+                    ).images[0]
+                    sd_images.append(transforms.ToTensor()(sd_image).to(device))
+
+                sd_batch = torch.stack(sd_images)  # SD-processed batch
+
+                # Compute Loss
+                vae_loss = loss_function(recon_batch, data, mu, logvar)
+                perceptual_sim_loss = perceptual_loss(sd_batch, data, lpips_loss_fn)
+                pixel_loss = F.l1_loss(recon_batch, data) + F.mse_loss(recon_batch, data)
+
+                loss = vae_loss + 0.1 * perceptual_sim_loss + 0.1 * pixel_loss
                 test_loss += loss.item()
 
         print(f"Epoch [{epoch}/{num_epochs}] Test Loss: {test_loss / len(test_dataloader)}")
+
+        # Save Model Every 10 Epochs
         if epoch % 10 == 0:
-            # Save the model checkpoints
             torch.save(model.state_dict(), f"models/vae/{epoch}.pth")
             print("Model saved!")
+
         
 
 
 # Function to perform the interpolation
 def interpolate_and_display(model,img1, img2, num_steps=10):
-    # Move the model and images to the correct device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
+    "CompVis/stable-diffusion-v1-4",
+    torch_dtype=torch.float16,
+    safety_checker=None  # Disables NSFW filter
+    ).to("cuda")
+    # Set the scheduler
+    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    pipe.scheduler.set_timesteps(50)  # Reduce noise for smoother results
+    # Enable attention slicing with a smaller slice size
+    pipe.enable_attention_slicing(slice_size="auto")  # Reduce the slice size if needed
+    pipe.to(device)
+    # Move the model and images to the correct device
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
     model.eval()
-    img1 = img1.to(device).unsqueeze(0)  # Unsqueeze to add a batch dimension
-    img2 = img2.to(device).unsqueeze(0)  # Unsqueeze to add a batch dimension
+    img1 = img1.to(device) # Unsqueeze to add a batch dimension
+    img2 = img2.to(device)  # Unsqueeze to add a batch dimension
 
     # Encode the two images to get their latent vectors
     mu1, logvar1 = model.encode(img1)
@@ -231,6 +284,21 @@ def interpolate_and_display(model,img1, img2, num_steps=10):
     for alpha in np.linspace(0, 1, num_steps):
         z_interpolated = (1 - alpha) * z1 + alpha * z2  # Linear interpolation
         recon_image = model.decode(z_interpolated)  # Decode the interpolated latent vector
+        # recon_image=pipe(prompt="A natural image", image=recon_image, strength=0.2, guidance_scale=5.0).images[0]
+        processed_images = []
+        # Loop over each image in the batch and process it individually
+        for i in range(recon_image.size(0)):  # loop over batch_size
+            # Convert the tensor image to PIL format (1 image)
+            image = recon_image[i]
+
+            # Pass the image through the pipe (one by one)
+            result_image = pipe(prompt="A natural image", image=image, strength=0.05, guidance_scale=2.5).images[0]
+
+            # Collect the processed image (can be converted back to tensor if needed)
+            processed_images.append(result_image)
+
+        # Convert the processed images back to tensor if needed
+        recon_image = torch.stack([transforms.ToTensor()(img) for img in processed_images]).to(device)
         # recon_image=(recon_image+1)/2
         # recon_image = (recon_image - recon_image.min()) / (recon_image.max() - recon_image.min())
 
@@ -251,17 +319,17 @@ def interpolate_and_display(model,img1, img2, num_steps=10):
 
 if __name__=="__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_epochs=100
-    base_dir = 'data/images/Images'  # Path to the base folder containing subfolders for classes
+    num_epochs=101
+    base_dir = 'images/Images'  # Path to the base folder containing subfolders for classes
     train_dataset = ImageFolderSplitter(base_dir=base_dir, split='train', transform=transform)
     test_dataset = ImageFolderSplitter(base_dir=base_dir, split='test', transform=transform)
 
     # Set up DataLoader
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    train(device,num_epochs)
-    model = VAE(latent_dim=1024).to(device)
-    model.load_state_dict(torch.load("models/vae/100.pth"))
+    train(device,num_epochs,train_dataloader,test_dataloader)
+    model = VAE(latent_dim=128).to(device)
+    model.load_state_dict(torch.load("models/vae/80.pth"))
     img1, _ = next(iter(train_dataloader))  # Example: first image from the train dataset
     img2, _ = next(iter(train_dataloader)) 
     interpolate_and_display(model,img1, img2, num_steps=10)
