@@ -10,6 +10,10 @@ import cv2
 
 from PIL import Image
 
+alpha = 1/3
+beta = 1/3
+gamma = 1/3
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 vgg = models.vgg19(weights=VGG19_Weights.DEFAULT).features.eval().to(device)
@@ -111,7 +115,7 @@ def evaluate_coherence(video_frames, original_image, text_description, video_fra
     frame_consistency = evaluate_video_consistency(video_frames)
     
     # Combine all the scores into a final coherence score
-    total_score = perceptual_loss + text_coherence + frame_consistency
+    total_score = alpha * (1 - perceptual_loss) + beta * text_coherence + gamma * (1 - frame_consistency)
     
     return total_score, perceptual_loss, text_coherence, frame_consistency
 
