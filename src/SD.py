@@ -66,7 +66,7 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     
     return images_interpolated
 
-def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolation(),depth=8):
+def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInterpolation(),depth=8):
     """ Interpolates between two images using Stable Diffusion and returns the generated images. """
     if depth ==0:
         return [image2]
@@ -78,16 +78,16 @@ def interpolate_images_iter(image1, image2,num=0,interp_model=LinearInterpolatio
         transforms.ToTensor(),
     ])
     intermediate_image=interp_model.interpolate(image1,image2,0.5)
-    text_prompt="A natural image"
+    text_prompt="A clear and natural image"
     path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
-    interp_image=pipe(prompt=text_prompt, image=intermediate_image, strength=0.05*(12-depth), guidance_scale=5.0).images[0]
+    interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.3, guidance_scale=5.0).images[0]
     
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
-    return interpolate_images_iter(image1,interp_image,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,num,interp_model,depth-1)
+    return interpolate_images_iter(image1,interp_image,prompts[:(int)(len(prompts)/2)-1],num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts[(int)(len(prompts)/2):],num,interp_model,depth-1)
 
 
 def preprocess_image(image_path, image_size=(image_size,image_size)):
@@ -138,7 +138,7 @@ import torch
 import numpy as np
 
 
-def generate_interpolated_video(interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=10, device="cuda"):
+def generate_interpolated_video(prompts,interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=8, device="cuda"):
     """ Loads key frames, generates interpolated frames using VAE, and creates a video. """
     frames = []
     frame_files = sorted(os.listdir(output_folder))  # Ensure correct order
@@ -159,7 +159,7 @@ def generate_interpolated_video(interpolation=LinearInterpolation(),output_folde
 
         # Interpolate between the frames
         #interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
-        interpolated_frames=interpolate_images_iter(current_frame,next_frame,num=i,interp_model=interpolation,depth=depth)
+        interpolated_frames=interpolate_images_iter(current_frame,next_frame,prompts[256*i:256*(i+1)],num=i,interp_model=interpolation,depth=depth)
         for frame in interpolated_frames:
             frame = transforms.ToPILImage()(frame.squeeze(0).cpu())  # Convert tensor to PIL
             frame=np.array(frame)
@@ -184,9 +184,12 @@ if __name__=="__main__":
     image_path = "images/test2.jpg"  # Change this to your image path
     text_prompt = "Beautiful mountain landscape." # Change this to your text prompt
 
-    text_prompt_list = client.generate_next_prompts(text_prompt)
-    text_prompt_list = client.generate_subprompts(text_prompt)
-
+    # text_prompt_list = client.generate_next_prompts(text_prompt)
+    # text_subprompt_list = client.generate_subprompts(text_prompt_list, 256*len(text_prompt_list))
+    text_prompt_list, text_subprompt_list = client.generate_or_load_subprompts(text_prompt, 256*4, filename_prompt="prompts/prompts.txt",filename_subprompt="prompts/subprompts.txt")
+    print(len(text_prompt_list))
+    print(len(text_subprompt_list))
+    # client.write_subprompts_to_file(text_subprompt_list, "prompts/subprompts.txt")
     initial_image = preprocess_image(image_path)
     vae=VAE(latent_dim=128)
     vae.load_state_dict(torch.load("models/vae/100.pth"))
@@ -194,4 +197,4 @@ if __name__=="__main__":
     vae_interp=VAEInterpolation(vae)
     # Generate
     generate_key_frames(initial_image, text_prompt_list, num_frames=len(text_prompt_list))
-    generate_interpolated_video(interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")
+    generate_interpolated_video(text_subprompt_list,interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")

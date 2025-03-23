@@ -11,7 +11,7 @@ generate_next_prompts: |
     - 'Prompt #5: A mountain at sunset with light clouds'
     - 'Prompt #6: A mountain under a starry night sky'
 
-  Now, please generate similar transitions for the following user prompt."
+  Now, please generate similar transitions for the following user prompt. 4 prompts (including the starting prompt) should be generated for a smooth transition."
 
 generate_subprompts: |
   I need you to generate a series of subprompts for Stable Diffusion that create a smooth, natural transition between multiple base scenes. The first set of prompts will be provided, and your task is to generate a series of intermediate subprompts that gradually evolve the scenes. Each subprompt should subtly alter the scene in a logical progression (e.g., changing time of day, weather, lighting, or atmosphere). The transitions should feel coherent, and each new subprompt should build upon the previous one.
