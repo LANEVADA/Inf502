@@ -30,14 +30,14 @@ def transform_pil_to_tensor(pil_img):
     
     # Apply the transformations
     image_tensor = transform(pil_img).unsqueeze(0)  # Add batch dimension (1, C, H, W)
-    
+    image_tensor = image_tensor.to(device)
     return image_tensor
 
 def load_image(image_path):
     image = Image.open(image_path).convert("RGB")  # Convert to RGB in case it's grayscale or has an alpha channel
     
     image_tensor = transform_pil_to_tensor(image)
-    
+    image_tensor = image_tensor.to(device)
     return image_tensor
 
 def load_video_frames(video_path):
@@ -122,10 +122,12 @@ def evaluate_coherence(video_frames, original_image, text_description, video_fra
 if __name__=="__main__":
 
     # Load frames from a .avi file
-    video_path = "../outputs_iter/output.avi"  # Path to your .avi file
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    video_path = "outputs/output.avi"  # Path to your .avi file
     video_frames, video_frames_pil = load_video_frames(video_path)
-    original_image = load_image("../images/test.jpg")
-    text_description = "A Summer night at the beach"
+    print(len(video_frames))
+    original_image = load_image("images/test2.jpg")
+    text_description = "Beautiful mountain landscape."
     print("video loaded")
 
     coherence_score, perceptual_loss_value, text_coherence_value, frame_consistency_value = evaluate_coherence(video_frames, original_image, text_description, video_frames_pil)
