@@ -6,4 +6,5 @@ outputs_ft_vae/
 outputs_iter_vae/
 outputs_iter_mult/
 outputs_iter_mult_prompt/
+outputs_iter_mult_prompt_vae/
 .env

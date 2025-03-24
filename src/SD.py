@@ -88,12 +88,12 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
         transforms.ToTensor(),
     ])
     intermediate_image=interp_model.interpolate(image1,image2,0.5)
-    text_prompt="A clear and natural image"
+    text_prompt="A clear and natural image of "
     path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
     intermediate_image=resize_image(intermediate_image)
-    interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.3, guidance_scale=5.0).images[0]
+    interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.5, guidance_scale=5.0).images[0]
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
@@ -210,4 +210,4 @@ if __name__=="__main__":
     vae_interp=VAEInterpolation(vae)
     # Generate
     generate_key_frames(initial_image, text_prompt_list, num_frames=len(text_prompt_list))
-    generate_interpolated_video(text_subprompt_list,interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi")
+    generate_interpolated_video(text_subprompt_list,interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")
