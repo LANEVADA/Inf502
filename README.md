@@ -20,7 +20,6 @@ It is recommended to store the API key in a .env file to keep it secure and avoi
 
    sh
    MISTRAL_API_KEY=your_api_key_here
-   
 
    Replace your_api_key_here with the actual API key you obtained.
 
@@ -30,6 +29,6 @@ To run:
 
 2.run VAE.py (1 and 2 optional if only running Linear)
 
-3.run SD.py(change model according to need)
+3.run SD.py(change model according to need, interp_model=LnearInterpolation() if Linear model wanted)
 
 4.run Loss.py to see loss
