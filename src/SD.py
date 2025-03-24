@@ -20,7 +20,7 @@ from Interpolation import Interpolation, LinearInterpolation, VAEInterpolation
 from VAE import VAE
 from LLM import LLMClient
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
+import numpy as np
 image_size=128
 
 pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
@@ -77,11 +77,13 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
     os.makedirs(os.path.dirname(path), exist_ok=True)
     raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
     intermediate_image=resize_image(intermediate_image)
-    interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.5, guidance_scale=5.0).images[0]
+    interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.5, guidance_scale=6.5).images[0]
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
-    return interpolate_images_iter(image1,interp_image,prompts[:(int)(np.floor((len(prompts)/2)))],num,interp_model,depth-1)+[interp_image]+interpolate_images_iter(interp_image,image2,prompts[(int)(np.floor((len(prompts)/2))):],num,interp_model,depth-1)
+    if (depth<=3):
+        return interpolate_images_iter(image1,interp_image,prompts,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts,num,interp_model,depth-1)
+    return interpolate_images_iter(image1,interp_image,prompts[:(int)(np.floor((len(prompts)/2)))],num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts[(int)(np.floor((len(prompts)/2))):],num,interp_model,depth-1)
 
 
 def preprocess_image(image_path, image_size=(image_size,image_size)):
@@ -128,13 +130,12 @@ def generate_key_frames(initial_image, text_prompt, num_frames=16, strength=0.8,
             current_frame = transform(image).unsqueeze(0).to(device)
 
     print(f"Key frames saved in {output_folder}")
-    
-import torch
-import numpy as np
+
 
 
 def generate_interpolated_video(prompts,interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi",depth=8, device="cuda"):
     """ Loads key frames, generates interpolated frames using VAE, and creates a video. """
+    print(f"Generating interpolated video with {interpolation.name()}...")
     frames = []
     frame_files = sorted(os.listdir(output_folder))  # Ensure correct order
 

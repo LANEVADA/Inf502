@@ -15,6 +15,8 @@ class Interpolation(ABC):
             alpha: Interpolation factor (0.0 <= alpha <= 1.0).
         """
         pass
+    def name(self):
+        return "Interpolation"
 
 # Linear interpolation subclass
 class LinearInterpolation(Interpolation):
@@ -24,6 +26,8 @@ class LinearInterpolation(Interpolation):
         Performs linear interpolation between two images.
         """
         return (1 - alpha) * img1 + alpha * img2
+    def name(self):
+        return "LinearInterpolation"
 
 # VAE interpolation subclass (just a template, needs a VAE model)
 class VAEInterpolation(Interpolation):
@@ -47,6 +51,8 @@ class VAEInterpolation(Interpolation):
         
         # Decode the interpolated latent representation back to an image
         return self.vae_model.decode(z_interp)
+    def name(self):
+        return "VAEInterpolation"
 
 # Example usage:
 # Initialize the models and images
