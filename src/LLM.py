@@ -48,9 +48,7 @@ class LLMClient:
 
     def generate_subprompts(self, prompt_list, total_subprompts):
         base_prompts_str = "\n  ".join([f"- {prompt}" for prompt in prompt_list])
-    
         prompt_template = self.prompts["generate_subprompts"]
-
         prompt = prompt_template.format(
             total_subprompts=total_subprompts
         )
@@ -66,19 +64,19 @@ class LLMClient:
             )
         ]
         return self.parse_subprompts(self.call_model_api(prompt).content)
+    
     def write_subprompts_to_file(self, subprompt_list, filename="subprompts.txt"):
-        # Writing the subprompts into a file
+        """ Writing the subprompts into a file """
         with open(filename, 'w') as file:
             for idx, subprompt in enumerate(subprompt_list, 1):
                 file.write(f"Subprompt #{idx}: {subprompt}\n")
         print(f"Subprompts saved in {filename}")
+
     def load_subprompts_from_file(self, filename="subprompts.txt"):
-        # Check if the file exists
         if not os.path.exists(filename):
             print(f"File {filename} not found!")
             return None
 
-        # Reading the subprompts from the file
         with open(filename, 'r') as file:
             file_content = file.read()
 
@@ -88,8 +86,8 @@ class LLMClient:
         loaded_subprompts = [re.sub("Subprompt #\d+: ", "", subprompt) for subprompt in loaded_subprompts]
         print(loaded_subprompts)
         return loaded_subprompts
+    
     def generate_or_load_subprompts(self, prompt, total_subprompts, filename_prompt="prompts/prompts.txt",filename_subprompt="prompts/subprompts"):
-        # Try to load the subprompts from the file first
         prompts=self.load_subprompts_from_file(filename_prompt)
         if prompts is not None:
             subprompts=[]
@@ -110,8 +108,6 @@ class LLMClient:
             subprompt_list = self.generate_subprompts(prompt_list_temp, total_subprompts)
             self.write_subprompts_to_file(subprompt_list, f"{filename_subprompt}_{i}.txt")
             subprompt_lists.append(subprompt_list)
-        # subprompt_list = self.generate_subprompts(prompt_list, total_subprompts)
-        # self.write_subprompts_to_file(subprompt_list, filename_subprompt)
         return prompt_list,subprompt_lists
 
 if __name__=="__main__":

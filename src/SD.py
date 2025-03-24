@@ -23,27 +23,13 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 image_size=128
 
-# Load CLIP model for text encoding
-# clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
-# clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
-# def get_text_embedding(text):
-#     inputs = clip_processor(text=text, return_tensors="pt").to(device)
-#     with torch.no_grad():
-#         text_features = clip_model.get_text_features(**inputs)
-#     return text_features
-
-# Load Stable Diffusion pipeline
-
 pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     torch_dtype=torch.float16,
     safety_checker=None  # Disables NSFW filter
 ).to("cuda")
-# Set the scheduler
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 pipe.scheduler.set_timesteps(50)  # Reduce noise for smoother results
-# Enable attention slicing with a smaller slice size
 pipe.enable_attention_slicing(slice_size="auto")  # Reduce the slice size if needed
 pipe.to(device)
 
@@ -60,7 +46,6 @@ def resize_image(image, size=(512, 512)):
 def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output_allframes="outputs/allframes",image_name="",num_frames=100):
     """ Interpolates between two images using Stable Diffusion and returns the generated images. """
 
-
     # Interpolate between the latent codes
     images_interpolated = []
     text_prompt="A natural image"
@@ -73,7 +58,6 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
         interp_image.save(image_path)
         images_interpolated.append(interp_image)
     # Generate images from the interpolated latent codes
-    
     return images_interpolated
 
 def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInterpolation(),depth=8):
@@ -171,16 +155,14 @@ def generate_interpolated_video(prompts,interpolation=LinearInterpolation(),outp
         next_frame = transform(img2).unsqueeze(0).to(device)
 
         # Interpolate between the frames
-        #interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
-        interpolated_frames=interpolate_images_iter(current_frame,next_frame,prompts[i],num=i,interp_model=interpolation,depth=depth)
+        interpolated_frames = interpolate_images_iter(current_frame,next_frame,prompts[i],num=i,interp_model=interpolation,depth=depth)
         for frame in interpolated_frames:
             frame = transforms.ToPILImage()(frame.squeeze(0).cpu())  # Convert tensor to PIL
-            frame=np.array(frame)
+            frame = np.array(frame)
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             frames.append(frame)  
 
     # Save the video
-    # print(frames[0].shape)
     height, width,_= frames[0].shape
     fourcc = cv2.VideoWriter_fourcc(*"XVID")
     out = cv2.VideoWriter(output_video, fourcc, 10, (width, height))
@@ -194,15 +176,12 @@ def generate_interpolated_video(prompts,interpolation=LinearInterpolation(),outp
 if __name__=="__main__":
     # Load the initial image
     client = LLMClient()
-    image_path = "images/test2.jpg"  # Change this to your image path
-    text_prompt = "Beautiful mountain landscape." # Change this to your text prompt
+    image_path = "images/test2.jpg"
+    text_prompt = "Beautiful mountain landscape."
 
-    # text_prompt_list = client.generate_next_prompts(text_prompt)
-    # text_subprompt_list = client.generate_subprompts(text_prompt_list, 256*len(text_prompt_list))
     text_prompt_list, text_subprompt_list = client.generate_or_load_subprompts(text_prompt, 32, filename_prompt="prompts/prompts.txt",filename_subprompt="prompts/subprompts.txt")
     print(len(text_prompt_list))
     print(len(text_subprompt_list))
-    # client.write_subprompts_to_file(text_subprompt_list, "prompts/subprompts.txt")
     initial_image = preprocess_image(image_path)
     vae=VAE(latent_dim=128)
     vae.load_state_dict(torch.load("models/vae/100.pth"))

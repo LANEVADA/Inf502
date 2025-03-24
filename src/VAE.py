@@ -281,7 +281,6 @@ def interpolate_and_display(model,img1, img2, num_steps=10):
     for alpha in np.linspace(0, 1, num_steps):
         z_interpolated = (1 - alpha) * z1 + alpha * z2  # Linear interpolation
         recon_image = model.decode(z_interpolated)  # Decode the interpolated latent vector
-        # recon_image=pipe(prompt="A natural image", image=recon_image, strength=0.2, guidance_scale=5.0).images[0]
         processed_images = []
         # Loop over each image in the batch and process it individually
         for i in range(recon_image.size(0)):  # loop over batch_size
@@ -296,9 +295,6 @@ def interpolate_and_display(model,img1, img2, num_steps=10):
 
         # Convert the processed images back to tensor if needed
         recon_image = torch.stack([transforms.ToTensor()(img) for img in processed_images]).to(device)
-        # recon_image=(recon_image+1)/2
-        # recon_image = (recon_image - recon_image.min()) / (recon_image.max() - recon_image.min())
-
         interpolated_images.append(recon_image.cpu().detach().numpy())
 
     # Plot the interpolated images
