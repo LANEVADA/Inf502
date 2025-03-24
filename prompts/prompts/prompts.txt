@@ -1,0 +1,4 @@
+Subprompt #1: Beautiful mountain landscape.
+Subprompt #2: Beautiful mountain landscape with a setting sun.
+Subprompt #3: Beautiful mountain landscape at dusk with a few stars appearing.
+Subprompt #4: Beautiful mountain landscape under a full starry night sky.
