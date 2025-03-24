@@ -6,3 +6,6 @@ PILLOW==9.0.1
 matplotlib==3.6.2
 opencv-python==4.6.0.66
 numpy==1.23.3
+langchain==0.3.21
+langchain-core==0.3.47
+langchain-mistralai==0.2.9
