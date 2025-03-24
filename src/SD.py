@@ -81,9 +81,7 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
-    if (depth<=3):
-        return [image1]+interpolate_images_iter(image1,interp_image,prompts,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts,num,interp_model,depth-1)+[image2]
-    return interpolate_images_iter(image1,interp_image,prompts[:(int)(np.floor((len(prompts)/2)))],num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts[(int)(np.floor((len(prompts)/2))):],num,interp_model,depth-1)
+    return interpolate_images_iter(image1,interp_image,prompts[:(int)(np.floor((len(prompts)/2)))],num,interp_model,depth-1)+[interp_image]+interpolate_images_iter(interp_image,image2,prompts[(int)(np.floor((len(prompts)/2))):],num,interp_model,depth-1)
 
 
 def preprocess_image(image_path, image_size=(image_size,image_size)):
