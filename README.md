@@ -32,3 +32,5 @@ To run:
 3.run SD.py(change model according to need, interp_model=LnearInterpolation() if Linear model wanted)
 
 4.run Loss.py to see loss
+
+In scratch: Our first ideas, failed attempts, etc.
