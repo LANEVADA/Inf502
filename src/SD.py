@@ -47,6 +47,16 @@ pipe.scheduler.set_timesteps(50)  # Reduce noise for smoother results
 pipe.enable_attention_slicing(slice_size="auto")  # Reduce the slice size if needed
 pipe.to(device)
 
+def resize_image(image, size=(512, 512)):
+    """Resizes a PIL Image or tensor to the given size."""
+    if isinstance(image, torch.Tensor):
+        transform = transforms.Compose([
+            transforms.Resize(size),
+            transforms.ToPILImage()
+        ])
+        return transform(image.squeeze(0).cpu())  # Convert to PIL for SD pipeline
+    return image.resize(size, Image.LANCZOS)
+
 def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output_allframes="outputs/allframes",image_name="",num_frames=100):
     """ Interpolates between two images using Stable Diffusion and returns the generated images. """
 
@@ -57,7 +67,7 @@ def interpolate_images(image1, image2,interp_model=LinearInterpolation(), output
     for i in range(num_frames):
         alpha = i / (num_frames - 1)
         image_interpolated = interp_model.interpolate(image1, image2, alpha)
-        
+        image_interpolated=resize_image(image_interpolated)
         interp_image=pipe(prompt=text_prompt, image=image_interpolated, strength=0.2, guidance_scale=5.0).images[0]
         image_path = os.path.join(output_allframes, f"frame_{image_name}_{i:03d}.png")
         interp_image.save(image_path)
@@ -82,8 +92,8 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
     path=os.path.join("outputs/allframes",f"indice_{num} at depth_{depth}.png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     raw = transforms.ToPILImage()(intermediate_image.squeeze(0).cpu())
+    intermediate_image=resize_image(intermediate_image)
     interp_image=pipe(prompt=text_prompt+prompts[(int)(np.floor(len(prompts)/2))], image=intermediate_image, strength=0.3, guidance_scale=5.0).images[0]
-    
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
@@ -118,8 +128,9 @@ def generate_key_frames(initial_image, text_prompt, num_frames=16, strength=0.8,
     for i in range(num_prompts):
         for j in range(frames_per_prompt):
         # Generate the next frame
+            current_frame = resize_image(current_frame)
             image = pipe(prompt=text_prompt[i], image=current_frame, strength=strength, guidance_scale=guidance_scale).images[0]
-
+            image=resize_image(image,size=(image_size,image_size))
             # Save the frame
             image_path = os.path.join(output_folder, f"frame_{frames_per_prompt*i+j:03d}.png")
             image.save(image_path)
