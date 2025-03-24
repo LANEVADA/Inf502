@@ -74,7 +74,7 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
         if (depth<=4):
             interp_model=LinearInterpolation()
     transform = transforms.Compose([
-        transforms.Resize((image_size,image_size)),
+        transforms.Resize((image_size, image_size)),
         transforms.ToTensor(),
     ])
     intermediate_image=interp_model.interpolate(image1,image2,0.5)
@@ -87,7 +87,9 @@ def interpolate_images_iter(image1, image2,prompts,num=0,interp_model=LinearInte
     interp_image.save(path)
     raw.save(path.replace(".png","_raw.png"))
     interp_image=transform(interp_image).unsqueeze(0).to(device)
-    return interpolate_images_iter(image1,interp_image,prompts[:(int)(len(prompts)/2)-1],num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts[(int)(len(prompts)/2):],num,interp_model,depth-1)
+    if (depth<=3):
+        return [image1]+interpolate_images_iter(image1,interp_image,prompts,num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts,num,interp_model,depth-1)+[image2]
+    return interpolate_images_iter(image1,interp_image,prompts[:(int)(np.floor((len(prompts)/2)))],num,interp_model,depth-1)+interpolate_images_iter(interp_image,image2,prompts[(int)(np.floor((len(prompts)/2))):],num,interp_model,depth-1)
 
 
 def preprocess_image(image_path, image_size=(image_size,image_size)):
@@ -159,7 +161,7 @@ def generate_interpolated_video(prompts,interpolation=LinearInterpolation(),outp
 
         # Interpolate between the frames
         #interpolated_frames = interpolate_images(current_frame, next_frame, image_name=f"key_{i}",num_frames=step)
-        interpolated_frames=interpolate_images_iter(current_frame,next_frame,prompts[256*i:256*(i+1)],num=i,interp_model=interpolation,depth=depth)
+        interpolated_frames=interpolate_images_iter(current_frame,next_frame,prompts[i],num=i,interp_model=interpolation,depth=depth)
         for frame in interpolated_frames:
             frame = transforms.ToPILImage()(frame.squeeze(0).cpu())  # Convert tensor to PIL
             frame=np.array(frame)
@@ -186,7 +188,7 @@ if __name__=="__main__":
 
     # text_prompt_list = client.generate_next_prompts(text_prompt)
     # text_subprompt_list = client.generate_subprompts(text_prompt_list, 256*len(text_prompt_list))
-    text_prompt_list, text_subprompt_list = client.generate_or_load_subprompts(text_prompt, 256*4, filename_prompt="prompts/prompts.txt",filename_subprompt="prompts/subprompts.txt")
+    text_prompt_list, text_subprompt_list = client.generate_or_load_subprompts(text_prompt, 32, filename_prompt="prompts/prompts.txt",filename_subprompt="prompts/subprompts.txt")
     print(len(text_prompt_list))
     print(len(text_subprompt_list))
     # client.write_subprompts_to_file(text_subprompt_list, "prompts/subprompts.txt")
@@ -197,4 +199,4 @@ if __name__=="__main__":
     vae_interp=VAEInterpolation(vae)
     # Generate
     generate_key_frames(initial_image, text_prompt_list, num_frames=len(text_prompt_list))
-    generate_interpolated_video(text_subprompt_list,interpolation=vae_interp,output_folder="outputs/keyframes", output_video="outputs/output.avi")
+    generate_interpolated_video(text_subprompt_list,interpolation=LinearInterpolation(),output_folder="outputs/keyframes", output_video="outputs/output.avi")

@@ -29,21 +29,21 @@ generate_subprompts: |
   - "A mountain under a starry night sky"
 
   **Generated Subprompts:**
-  - 'Subprompt #1: A mountain on a sunny day with clear skies and vibrant green grass.'
-  - 'Subprompt #2: A mountain with a few clouds beginning to form, casting light shadows on the slopes.'
-  - 'Subprompt #3: A mountain with more clouds gathering in the sky, the lighting shifting to a warmer hue.'
-  - 'Subprompt #4: A mountain under a sky filled with colorful hues, as the sun begins to set on the horizon.'
-  - 'Subprompt #5: A mountain at sunset, with golden-orange skies and the first stars appearing.'
-  - 'Subprompt #6: A mountain at sunset, with the sky transitioning from deep oranges to purples.'
-  - 'Subprompt #7: A mountain at dusk, with a rich purple and blue sky, stars becoming more visible.'
-  - 'Subprompt #8: A mountain at twilight, with the last traces of daylight fading, and a cool breeze settling in.'
-  - 'Subprompt #9: A mountain under a deepening blue sky, with the first light of stars visible against the fading sky.'
-  - 'Subprompt #10: A mountain under a starry night sky, with the constellations shining brightly and the air cool.'
-  - 'Subprompt #11: A mountain under a starry sky, with the Milky Way stretching across the heavens, casting a faint glow.'
-  - 'Subprompt #12: A mountain in the dead of night, with a clear star-filled sky, the air crisp and still.'
-  - 'Subprompt #13: A mountain under a perfectly clear sky, with thousands of stars visible and the moon rising gently.'
-  - 'Subprompt #14: A mountain at night, with the moonlight casting soft shadows and highlighting the peaks.'
-  - 'Subprompt #15: A mountain at night, under a sky full of stars, with a cool mist rising from the valleys.'
+  - Subprompt #1: A mountain on a sunny day with clear skies and vibrant green grass.
+  - Subprompt #2: A mountain with a few clouds beginning to form, casting light shadows on the slopes.
+  - Subprompt #3: A mountain with more clouds gathering in the sky, the lighting shifting to a warmer hue.
+  - Subprompt #4: A mountain under a sky filled with colorful hues, as the sun begins to set on the horizon.
+  - Subprompt #5: A mountain at sunset, with golden-orange skies and the first stars appearing.
+  - Subprompt #6: A mountain at sunset, with the sky transitioning from deep oranges to purples.
+  - Subprompt #7: A mountain at dusk, with a rich purple and blue sky, stars becoming more visible.
+  - Subprompt #8: A mountain at twilight, with the last traces of daylight fading, and a cool breeze settling in.
+  - Subprompt #9: A mountain under a deepening blue sky, with the first light of stars visible against the fading sky.
+  - Subprompt #10: A mountain under a starry night sky, with the constellations shining brightly and the air cool.
+  - Subprompt #11: A mountain under a starry sky, with the Milky Way stretching across the heavens, casting a faint glow.
+  - Subprompt #12: A mountain in the dead of night, with a clear star-filled sky, the air crisp and still.
+  - Subprompt #13: A mountain under a perfectly clear sky, with thousands of stars visible and the moon rising gently.
+  - Subprompt #14: A mountain at night, with the moonlight casting soft shadows and highlighting the peaks.
+  - Subprompt #15: A mountain at night, under a sky full of stars, with a cool mist rising from the valleys.
 
   **Your task:**
 
