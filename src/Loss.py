@@ -9,6 +9,7 @@ from torchvision.transforms import ToTensor
 import cv2
 from PIL import Image
 
+# weights for the total loss
 alpha = 1/3
 beta = 1/3
 gamma = 1/3
@@ -25,12 +26,15 @@ def transform_pil_to_tensor(pil_img):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
+    # Apply the transformations
     image_tensor = transform(pil_img).unsqueeze(0)
+    image_tensor = image_tensor.to(device)
     return image_tensor
 
 def load_image(image_path):
     image = Image.open(image_path).convert("RGB")
     image_tensor = transform_pil_to_tensor(image)
+    image_tensor = image_tensor.to(device)
     return image_tensor
 
 def load_video_frames(video_path):
@@ -93,10 +97,13 @@ def evaluate_coherence(video_frames, original_image, text_description, video_fra
 # Example usage:
 if __name__=="__main__":
 
-    video_path = "../outputs_iter/output.avi"
+    # Load frames from a .avi file
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    video_path = "outputs/output.avi"  # Path to your .avi file
     video_frames, video_frames_pil = load_video_frames(video_path)
-    original_image = load_image("../images/test.jpg")
-    text_description = "A Summer night at the beach"
+    print(len(video_frames))
+    original_image = load_image("images/test2.jpg")
+    text_description = "Beautiful mountain landscape."
     print("video loaded")
 
     coherence_score, perceptual_loss_value, text_coherence_value, frame_consistency_value = evaluate_coherence(video_frames, original_image, text_description, video_frames_pil)
